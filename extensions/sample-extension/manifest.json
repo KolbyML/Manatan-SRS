@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "sample-extension",
+  "name": "Sample Extension",
+  "version": "0.1.0",
+  "description": "Adds a small panel to the dashboard; a starting point for new extensions.",
+  "author": "Kolby Moroz Liebl",
+  "license": "MIT",
+  "apiVersion": 1,
+  "wasm": "sample-extension.wasm",
+  "surfaces": ["dashboard"],
+  "permissions": {
+    "collection": "read"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "power-extension",
+  "name": "Power Extension",
+  "version": "0.1.0",
+  "description": "Exercises the ui and reviewer capabilities (menu command + auto-bury).",
+  "author": "Kolby Moroz Liebl",
+  "license": "MIT",
+  "apiVersion": 1,
+  "wasm": "power-extension.wasm",
+  "surfaces": [],
+  "permissions": {
+    "reviewer": true,
+    "ui": true
+  }
+}

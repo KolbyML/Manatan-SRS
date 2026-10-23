@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "anki-connect",
+  "name": "AnkiConnect",
+  "version": "2.1.0",
+  "description": "Exposes the AnkiConnect API on 127.0.0.1:8765 so external tools like Yomitan can create and query cards. Compatible with tools built for Anki's AnkiConnect add-on.",
+  "author": "Kolby Moroz Liebl",
+  "license": "MIT",
+  "apiVersion": 1,
+  "wasm": "anki-connect.wasm",
+  "surfaces": [],
+  "permissions": {
+    "collection": "write",
+    "network": {
+      "allow": [
+        "http://",
+        "https://"
+      ]
+    },
+    "serve": {
+      "ports": [
+        8765
+      ]
+    }
+  }
+}

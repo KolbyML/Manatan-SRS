@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "event-logger",
+  "name": "Event Logger",
+  "version": "1.0.0",
+  "description": "Records review/note lifecycle hooks into its config, stamps rendered cards, and adds a Tools-menu ping — a demo of the hook, command, and timer surfaces.",
+  "author": "Kolby Moroz Liebl",
+  "license": "MIT",
+  "apiVersion": 1,
+  "wasm": "event-logger.wasm",
+  "surfaces": [
+    "reviewer"
+  ],
+  "permissions": {
+    "collection": "read",
+    "ui": true,
+    "tasks": true,
+    "reviewer": true
+  }
+}

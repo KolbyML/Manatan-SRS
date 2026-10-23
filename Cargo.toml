@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/manatan-srs-sdk", "extensions/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/KolbyML/Manatan-SRS"
+authors = ["Kolby Moroz Liebl"]
+
+[workspace.dependencies]
+manatan-srs-sdk = { path = "crates/manatan-srs-sdk" }
+# Pin to the wit-bindgen you build with; the generated binding layout and the
+# `generate!` options can shift between releases.
+wit-bindgen = "0.34"
+
+# Extensions are tiny; optimize for size so the shipped .wasm stays small.
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

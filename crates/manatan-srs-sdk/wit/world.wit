@@ -1,0 +1,441 @@
+// The contract between a Manatan SRS extension (a WebAssembly component, the
+// "guest") and the Manatan host that runs it. This file is the entire public
+// API: it has no dependency on Manatan's closed-source code, and any language
+// that targets the WebAssembly Component Model can implement it.
+//
+// Extensions use capability-gated interfaces instead of arbitrary native
+// code. The host only links the
+// interfaces an extension's manifest requests and the user grants.
+package manatan:srs@0.1.0;
+
+/// Core data types shared by the host capabilities and the extension.
+interface types {
+    type note-id = u64;
+    type card-id = u64;
+    type deck-id = u64;
+    type notetype-id = u64;
+    type deck-config-id = u64;
+
+    record field { name: string, value: string }
+
+    record note {
+        id: note-id,
+        notetype-id: notetype-id,
+        notetype-name: string,
+        deck-id: deck-id,
+        fields: list<field>,
+        tags: list<string>,
+        modified: s64,
+    }
+
+    enum card-queue { new, learning, review, day-learning, suspended, buried }
+
+    /// Card flags (colored markers), plus `none`.
+    enum card-flag { none, red, orange, green, blue, pink, turquoise, purple }
+
+    record card {
+        id: card-id,
+        note-id: note-id,
+        deck-id: deck-id,
+        /// 0-based template index within the note type.
+        template: u32,
+        queue: card-queue,
+        flag: card-flag,
+        marked: bool,
+        due: s64,
+        interval: s32,
+        ease-factor: u32,
+        reps: u32,
+        lapses: u32,
+    }
+
+    record deck {
+        id: deck-id,
+        name: string,
+        config-id: deck-config-id,
+        new-count: u32,
+        learning-count: u32,
+        review-count: u32,
+    }
+
+    /// One card template of a note type (question/answer format strings).
+    record template { ord: u32, name: string, front: string, back: string }
+
+    record notetype {
+        id: notetype-id,
+        name: string,
+        is-cloze: bool,
+        fields: list<string>,
+        templates: list<template>,
+        css: string,
+    }
+
+    enum review-kind { learn, review, relearn, filtered, manual, rescheduled }
+
+    record review-log-entry {
+        /// Review time as a unix-millisecond timestamp (also the row id).
+        timestamp: s64,
+        card-id: card-id,
+        button: u8,
+        kind: review-kind,
+        interval: s32,
+        last-interval: s32,
+        ease-factor: u32,
+        taken-millis: u32,
+    }
+
+    /// Answer rating for the scheduler.
+    enum rating { again, hard, good, easy }
+
+    /// The post-answer scheduling the app would apply; an extension can
+    /// override intervals via `guest.override-scheduling` (custom scheduling,
+    /// load balancers).
+    record scheduling-state {
+        interval-secs: s64,
+        ease-factor: u32,
+    }
+}
+
+/// Read and write the collection: notes, cards, decks, note types, tags,
+/// media, rendering and stats. Gated by the `collection` permission
+/// (`read` or `write`); mutating functions require `write`.
+interface collection {
+    use types.{
+        note, card, deck, notetype, note-id, card-id, deck-id, notetype-id,
+        review-log-entry,
+    };
+
+    // --- search / read ---
+    find-cards: func(search: string) -> result<list<card-id>, string>;
+    find-notes: func(search: string) -> result<list<note-id>, string>;
+    get-card: func(id: card-id) -> option<card>;
+    get-note: func(id: note-id) -> option<note>;
+    card-count: func(search: string) -> u32;
+
+    // --- notes (write) ---
+    add-note: func(
+        deck: string,
+        notetype: string,
+        fields: list<tuple<string, string>>,
+        tags: list<string>
+    ) -> result<note-id, string>;
+    update-note-fields: func(
+        id: note-id,
+        fields: list<tuple<string, string>>
+    ) -> result<_, string>;
+    delete-notes: func(ids: list<note-id>) -> result<_, string>;
+    /// Bulk find-and-replace across notes (Batch Editing, Find & Replace).
+    /// `field` limits to one field; `regex` treats `search` as a regex.
+    find-and-replace: func(
+        note-ids: list<note-id>,
+        search: string,
+        replacement: string,
+        regex: bool,
+        field: option<string>
+    ) -> result<u32, string>;
+
+    // --- tags ---
+    list-tags: func() -> list<string>;
+    add-tags: func(note-ids: list<note-id>, tags: string) -> result<_, string>;
+    remove-tags: func(note-ids: list<note-id>, tags: string) -> result<_, string>;
+
+    // --- decks ---
+    list-decks: func() -> list<deck>;
+    add-deck: func(name: string) -> result<deck-id, string>;
+    rename-deck: func(id: deck-id, name: string) -> result<_, string>;
+    remove-decks: func(ids: list<deck-id>) -> result<_, string>;
+    move-cards-to-deck: func(card-ids: list<card-id>, deck: string) -> result<_, string>;
+
+    // --- note types ---
+    list-notetypes: func() -> list<tuple<notetype-id, string>>;
+    get-notetype: func(id: notetype-id) -> option<notetype>;
+    add-notetype: func(nt: notetype) -> result<notetype-id, string>;
+    update-notetype: func(nt: notetype) -> result<_, string>;
+
+    // --- rendering ---
+    /// Fully rendered HTML for a card side, fields substituted and custom
+    /// field-filters applied — for previews and transforms.
+    render-card: func(id: card-id, answer-side: bool) -> result<string, string>;
+
+    // --- stats ---
+    /// Review-log rows in [since-ms, until-ms): the basis for heatmaps,
+    /// streaks, retention graphs. Replaces any bespoke stats endpoint.
+    review-log: func(since-ms: s64, until-ms: s64) -> list<review-log-entry>;
+    /// Cards due on each of the next `days` days (offset 0 = today).
+    due-forecast: func(days: u32) -> list<u32>;
+
+    // --- media ---
+    store-media: func(filename: string, data: list<u8>) -> result<string, string>;
+    retrieve-media: func(filename: string) -> option<list<u8>>;
+    trash-media: func(filenames: list<string>) -> result<_, string>;
+}
+
+/// Scheduling: programmatic answering, bulk card operations, deck options,
+/// and counts. Gated by the `scheduler` permission.
+interface scheduler {
+    use types.{card-id, deck-id, rating, card-flag};
+
+    answer-card: func(card: card-id, rating: rating) -> result<_, string>;
+    /// Due-date expressions: "1", "3-5", "0!".
+    set-due-date: func(card-ids: list<card-id>, days: string) -> result<_, string>;
+    reset-cards: func(card-ids: list<card-id>) -> result<_, string>;
+    bury-cards: func(card-ids: list<card-id>) -> result<_, string>;
+    unbury-cards: func(card-ids: list<card-id>) -> result<_, string>;
+    suspend-cards: func(card-ids: list<card-id>) -> result<_, string>;
+    unsuspend-cards: func(card-ids: list<card-id>) -> result<_, string>;
+    set-flag: func(card-ids: list<card-id>, flag: card-flag) -> result<_, string>;
+
+    /// Deck options as JSON (the app's deck-config schema).
+    get-deck-config: func(deck: deck-id) -> option<string>;
+    set-deck-config: func(deck: deck-id, config-json: string) -> result<_, string>;
+
+    /// (new, learning, review) due counts for a deck.
+    deck-due-counts: func(deck: deck-id) -> tuple<u32, u32, u32>;
+}
+
+/// Drive the active review session. Gated by `reviewer`. Calls no-op when
+/// nothing is being reviewed.
+interface reviewer {
+    use types.{card, card-flag};
+
+    current-card: func() -> option<card>;
+    show-answer: func();
+    /// Answer the current card: 1=again .. 4=easy.
+    answer: func(button: u8);
+    bury-card: func();
+    suspend-card: func();
+    set-flag: func(flag: card-flag);
+    toggle-mark: func();
+    replay-audio: func();
+    undo: func();
+    /// Open the current note in an inline editor (Edit Field During Review).
+    edit-current-note: func();
+}
+
+/// Register app-integration points and drive lightweight UI. Gated by the
+/// `ui` permission. Registrations are typically made from `guest.init`; the
+/// host invokes the matching `guest` hook when the user activates them.
+interface ui {
+    use types.{card-id};
+
+    enum command-location { tools-menu, main-toolbar, reviewer-toolbar, browser-menu }
+    record command {
+        id: string,
+        label: string,
+        location: command-location,
+        /// Optional keyboard shortcut, e.g. "Ctrl+Shift+H".
+        shortcut: option<string>,
+    }
+    /// Add a menu item / toolbar button / shortcut. Activated →
+    /// `guest.on-command(id)`.
+    register-command: func(command: command);
+
+    record browser-column { id: string, label: string }
+    /// Add a custom Browser column; values come from
+    /// `guest.browser-column-value`.
+    register-browser-column: func(column: browser-column);
+
+    record editor-button { id: string, label: string, icon-svg: option<string> }
+    /// Add an editor toolbar button. Clicked → `guest.on-editor-button`.
+    register-editor-button: func(button: editor-button);
+
+    enum notify-kind { info, success, warning, error }
+    notify: func(message: string, kind: notify-kind);
+
+    /// Open a modal that renders the extension's HTML. Its JS can post back
+    /// via the host bridge → `guest.on-message(source: "dialog", ...)`.
+    open-dialog: func(title: string, html: string);
+
+    /// Open the card browser with a search string.
+    open-browser: func(search: string);
+    /// Open a URL in the user's external browser.
+    open-url: func(url: string);
+
+    /// Ask the host to re-render this extension's contribution to a surface
+    /// (e.g. after its data changed).
+    refresh-surface: func(surface: string);
+
+    /// Cards currently selected in the Browser (empty elsewhere) — lets a
+    /// browser command act on the user's selection.
+    selected-cards: func() -> list<card-id>;
+}
+
+/// User-mediated file access. There is NO ambient filesystem: the host shows
+/// a native picker and nothing is read or written without the user choosing
+/// it each time. This covers import/export extensions (JSON, CSV, HTML
+/// export) safely. Gated by the `files` permission.
+interface files {
+    /// Prompt the user to open a file. `accept` is an optional filter, e.g.
+    /// ".csv,.json". Returns (filename, bytes), or none if cancelled.
+    open-file: func(accept: option<string>) -> option<tuple<string, list<u8>>>;
+    /// Prompt the user to save `data` under a suggested filename.
+    save-file: func(filename: string, data: list<u8>) -> result<_, string>;
+}
+
+/// Audio, text-to-speech, screenshots and the clipboard. Gated by `media`.
+interface media {
+    /// Play a media file (stored filename) or URL.
+    play-audio: func(source: string) -> result<_, string>;
+    stop-audio: func();
+    /// Synthesize speech with the system/configured engine; returns the
+    /// stored media filename.
+    tts: func(text: string, voice: option<string>) -> result<string, string>;
+    /// Capture the current card view as PNG bytes.
+    screenshot: func() -> option<list<u8>>;
+    clipboard-get-text: func() -> option<string>;
+    clipboard-set-text: func(text: string);
+    clipboard-get-image: func() -> option<list<u8>>;
+}
+
+/// Network access. `fetch` is gated by `network` (+ allowlist); `serve` by
+/// `serve`. `serve` asks the host to run an HTTP listener and deliver requests
+/// to `guest.handle-http` — how a local integration API works without
+/// the sandbox binding a socket.
+interface net {
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: list<u8>,
+    }
+    record http-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: list<u8>,
+    }
+    fetch: func(request: http-request) -> result<http-response, string>;
+    serve: func(port: u16) -> result<_, string>;
+}
+
+/// Per-extension persistence. Keys are private to the extension; `config` is
+/// the user-editable JSON shown in the extension's settings. Always available.
+interface store {
+    get: func(key: string) -> option<string>;
+    set: func(key: string, value: string);
+    delete: func(key: string);
+    list-keys: func() -> list<string>;
+    config: func() -> string;
+    set-config: func(value: string);
+}
+
+/// Background timers, so an extension can do periodic work without a page
+/// open. Gated by `tasks`.
+interface tasks {
+    /// Call `guest.on-timer(id)` after `delay-ms`, optionally repeating.
+    set-timer: func(id: string, delay-ms: u64, repeat: bool);
+    clear-timer: func(id: string);
+}
+
+/// Diagnostics and host metadata. Always available.
+interface host {
+    enum log-level { trace, debug, info, warn, error }
+    log: func(level: log-level, message: string);
+    now-millis: func() -> s64;
+    /// Local UTC offset in seconds (heatmaps bucket by local day).
+    utc-offset-seconds: func() -> s32;
+    api-version: func() -> u32;
+    /// "light" or "dark" — so extension UI matches the app theme.
+    theme: func() -> string;
+    /// BCP-47 language tag of the app UI, e.g. "en", "ja".
+    locale: func() -> string;
+}
+
+/// The interface every extension implements. The Rust SDK supplies default
+/// (no-op) bodies for all of these, so an author writes only the hooks they
+/// need. Hooks cover lifecycle, review, note/card data,
+/// rendering + transforms, editor, browser, UI, and app events.
+interface guest {
+    use types.{card, note, note-id, card-id, rating, scheduling-state};
+    use net.{http-request, http-response};
+
+    // --- lifecycle ---
+    init: func();
+    on-collection-loaded: func();
+    on-collection-closing: func();
+    on-profile-open: func();
+    on-day-changed: func();
+
+    // --- review session ---
+    on-card-shown: func(card: card);
+    on-answer-shown: func(card: card);
+    on-review-answered: func(card: card, button: u8);
+    on-will-bury: func(card: card);
+    on-will-suspend: func(card: card);
+    on-review-ended: func();
+    /// Customize answer-button labels (default labels passed in).
+    answer-button-labels: func(card: card, defaults: list<string>) -> list<string>;
+    /// Override the scheduler's post-answer interval (custom scheduling, load
+    /// balancer). Return none to keep the default.
+    override-scheduling: func(
+        card: card,
+        rating: rating,
+        default: scheduling-state
+    ) -> option<scheduling-state>;
+
+    // --- note / card data ---
+    /// Transform a note just before it is added. Return none to leave it.
+    on-note-will-be-added: func(note: note) -> option<note>;
+    on-note-added: func(note-id: note-id);
+    on-notes-will-be-deleted: func(note-ids: list<note-id>);
+
+    // --- rendering / transforms ---
+    /// Contribute an HTML fragment to a surface: "dashboard" | "overview" |
+    /// "reviewer" | "browser" | "editor" | "stats" | "deck-options". `context`
+    /// is a JSON blob describing the page. Return "" to render nothing.
+    render: func(surface: string, context: string) -> string;
+    /// Transform a rendered card's HTML. Return none
+    /// to keep it unchanged.
+    transform-card-html: func(card: card, answer-side: bool, html: string) -> option<string>;
+    /// Implement a custom template field filter, {{filter-name:field}}. Return
+    /// none if this extension doesn't handle `filter-name`.
+    field-filter: func(
+        filter-name: string,
+        field-name: string,
+        field-text: string,
+        card: card
+    ) -> option<string>;
+
+    // --- editor ---
+    on-editor-loaded: func(note-id: note-id);
+    on-editor-field-changed: func(note-id: note-id, field-ord: u32, value: string);
+    /// Transform pasted HTML in the editor. Return none to keep it.
+    on-editor-paste: func(html: string) -> option<string>;
+    on-editor-button: func(button-id: string, note-id: note-id);
+
+    // --- browser ---
+    /// Modify the search string before it runs. Return none to keep it.
+    on-browser-search: func(search: string) -> option<string>;
+    /// Value for a registered custom column, per card.
+    browser-column-value: func(column-id: string, card: card) -> string;
+
+    // --- ui / messages ---
+    on-command: func(command-id: string);
+    /// A message from injected surface JS or an open-dialog (the UI message
+    /// bridge). Return a string reply.
+    on-message: func(source: string, payload: string) -> string;
+    on-timer: func(timer-id: string);
+
+    // --- app events ---
+    on-state-changed: func(old-state: string, new-state: string);
+    on-sync-started: func();
+    on-sync-finished: func();
+
+    // --- http serve ---
+    handle-http: func(request: http-request) -> http-response;
+}
+
+/// The world a Manatan SRS extension component targets.
+world extension {
+    import collection;
+    import scheduler;
+    import reviewer;
+    import ui;
+    import files;
+    import media;
+    import net;
+    import store;
+    import tasks;
+    import host;
+
+    export guest;
+}
