@@ -1,7 +1,8 @@
 # Preparing an SDK release
 
-The proposed first registry version is `manatan-srs-sdk` 0.1.0. Publication
-requires the repository owner's explicit approval. Building a local package
+The `manatan-srs-sdk` 0.1.0 developer preview is published on crates.io.
+Future SDK releases and extension publications require the repository owner's
+explicit approval. Building a local package
 does not publish it, reserve its name, or create a GitHub release.
 
 ## Local verification
@@ -13,6 +14,7 @@ cargo package -p manatan-srs-sdk --allow-dirty
 cargo build -p sample-extension --target wasm32-unknown-unknown --release --locked
 wasm-tools component new target/wasm32-unknown-unknown/release/sample_extension.wasm -o target/sample-extension.wasm
 wasm-tools validate --features component-model target/sample-extension.wasm
+bash scripts/package-deck-counter.sh
 ```
 
 Inspect `cargo package -p manatan-srs-sdk --list --allow-dirty`: it must contain

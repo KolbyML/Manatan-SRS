@@ -16,4 +16,5 @@ cmp LICENSE crates/manatan-srs-sdk/LICENSE
 cargo build -p sample-extension --target wasm32-unknown-unknown --release --locked
 wasm-tools component new target/wasm32-unknown-unknown/release/sample_extension.wasm -o target/sample-extension.wasm
 wasm-tools validate --features component-model target/sample-extension.wasm
-echo 'SDK package and sample component verified locally. Nothing published.'
+bash scripts/package-deck-counter.sh
+echo 'SDK package and example components verified locally. Nothing published.'

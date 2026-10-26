@@ -7,8 +7,9 @@ Manatan SRS is a spaced-repetition app. Build dashboard visualizations, review
 tools, custom study workflows, and local integrations as self-contained
 WebAssembly packages with explicit permissions.
 
-The SDK is being prepared for its first registry release. Until that release
-is approved and available, use this repository's local path dependency.
+The [SDK 0.1.0 developer preview](https://crates.io/crates/manatan-srs-sdk/0.1.0)
+is available on crates.io. Use `manatan-srs-sdk = "=0.1.0"` in a standalone
+project, or the local workspace dependency when developing this repository.
 
 - **Independent of the private host.** This repo defines the entire contract in
   [`world.wit`](crates/manatan-srs-sdk/wit/world.wit) and a thin Rust SDK over it. Nothing here
@@ -41,6 +42,10 @@ manatan_srs_sdk::export_extension!(DeckCounter);
 
 Then build it into a component and zip it with a `manifest.json` — see
 [`docs/AUTHORING.md`](docs/AUTHORING.md).
+
+For a complete standalone project and a local `.mext` packaging command, see
+the [Deck Counter tutorial example](examples/deck-counter). It builds against
+the published SDK and requests only read access to the collection.
 
 ## What an extension can do
 
@@ -77,6 +82,7 @@ extensions/reviewer-progress/     a "N reviewed today" badge on the reviewer sur
 extensions/power-extension/       a Tools-menu command that buries the current card
 extensions/anki-connect/          compatibility bridge for existing external tools
 extensions/event-logger/          hooks, a Tools-menu command, and a timer
+examples/deck-counter/            standalone, registry-SDK tutorial example
 docs/AUTHORING.md                 toolchain, build, manifest, packaging
 docs/RELEASING.md                 local verification and approval gates
 ```

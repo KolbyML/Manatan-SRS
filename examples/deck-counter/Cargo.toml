@@ -1,0 +1,21 @@
+[package]
+name = "deck-counter"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+# This example is intentionally independent of the SDK source workspace. It
+# builds against the same registry release used by the public tutorial.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+manatan-srs-sdk = "=0.1.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

@@ -19,9 +19,11 @@ etc. instead of `std` I/O.
 
 ## 2. Write the extension
 
-Start from `extensions/sample-extension`. Its Cargo manifest uses `cdylib`
-and the workspace's local SDK dependency. The SDK is not yet announced as a
-registry release; do not substitute a crates.io dependency until it exists.
+Start from the standalone [`examples/deck-counter`](../examples/deck-counter)
+project to use the published SDK: `manatan-srs-sdk = "=0.1.0"`. Its README
+includes a packaging command and an install/permissions/lifecycle checklist.
+For development inside this repository, `extensions/sample-extension` uses
+`cdylib` and the workspace's local SDK dependency instead.
 
 ```rust
 use manatan_srs_sdk::{collection, host, store, Extension};

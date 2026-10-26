@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "deck-counter",
+  "name": "Deck Counter",
+  "version": "0.1.0",
+  "description": "Shows the number of decks in the active collection on your dashboard. A minimal, read-only extension example.",
+  "author": "KolbyML",
+  "homepage": "https://manatan.com/blog/build-manatan-srs-extensions",
+  "license": "MIT",
+  "apiVersion": 1,
+  "wasm": "deck-counter.wasm",
+  "surfaces": ["dashboard"],
+  "permissions": {
+    "collection": "read"
+  }
+}
